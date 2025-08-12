@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Vibration API — On/Off Test</title>
+  <style>
+    :root{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;}
+    body{max-width:720px;margin:3rem auto;padding:1rem;line-height:1.4}
+    h1{font-size:1.4rem;margin-bottom:.25rem}
+    .card{border:1px solid #ddd;border-radius:12px;padding:1rem;margin-top:1rem;box-shadow:0 6px 18px rgba(0,0,0,.03)}
+    .row{display:flex;gap:.75rem;align-items:center;margin:.5rem 0}
+    label{min-width:110px}
+    button{padding:.6rem .9rem;border-radius:8px;border:1px solid #bbb;background:#f7f7f7}
+    .danger{background:#ffecec}
+    .muted{color:#666;font-size:.9rem}
+    .status{font-weight:700}
+    input[type=number]{width:90px;padding:.4rem}
+    .kbd{background:#111;color:#fff;padding:.2rem .5rem;border-radius:6px;font-size:.9rem}
+    footer{font-size:.85rem;color:#666;margin-top:1rem}
+  </style>
+</head>
+<body>
+  <h1>Vibration API — On/Off Test</h1>
+  <p class="muted">This page toggles device vibration using the <code>navigator.vibrate()</code> API. Works on most mobile browsers (not on desktop). Use the on/off switch below to start continuous vibration, or press <em>Test</em> for a single burst.</p>
+
+  <div class="card">
+    <div class="row">
+      <label for="power">Vibration</label>
+      <button id="power" aria-pressed="false">Turn ON</button>
+      <span id="status" class="muted">Support: <span id="support">—</span></span>
+    </div>
+
+    <div class="row">
+      <label for="pattern">Pattern (ms)</label>
+      <input id="pattern" value="200,100,200" placeholder="200,100,200" />
+      <small class="muted">comma-separated (vibrate,pause,vibrate...)</small>
+    </div>
+
+    <div class="row">
+      <label for="continuous">Continuous</label>
+      <input id="continuous" type="checkbox" />
+      <small class="muted">If enabled, repeats the pattern until you turn off.</small>
+    </div>
+
+    <div class="row">
+      <button id="test">Test once</button>
+      <button id="stop" class="danger">Stop</button>
+    </div>
+
+    <div class="row">
+      <label>Current</label>
+      <div><span id="onoff" class="status">OFF</span></div>
+    </div>
+  </div>
+
+  <footer>
+    Note: Vibration may be blocked by OS/user settings or not supported by the browser. On Android Chrome it usually works; on iOS Safari vibration is not supported as of many iOS versions.
+  </footer>
+
+  <script>
+    // Simple vibration controller with continuous repeat option
+    const powerBtn = document.getElementById('power');
+    const testBtn = document.getElementById('test');
+    const stopBtn = document.getElementById('stop');
+    const patternInput = document.getElementById('pattern');
+    const continuousCheckbox = document.getElementById('continuous');
+    const supportEl = document.getElementById('support');
+    const onoffEl = document.getElementById('onoff');
+
+    let repeatingInterval = null;
+    let isOn = false;
+
+    function supportsVibration() {
+      return 'vibrate' in navigator && typeof navigator.vibrate === 'function';
+    }
+
+    function parsePattern(text) {
+      // parse comma or space separated numbers
+      try{
+        const parts = text.split(/[,\s]+/).map(s => Number(s)).filter(n => !Number.isNaN(n) && n>=0);
+        return parts.length ? parts : [200];
+      }catch(e){return [200];}
+    }
+
+    function vibrateOnce() {
+      if(!supportsVibration()) return false;
+      const pattern = parsePattern(patternInput.value);
+      return navigator.vibrate(pattern);
+    }
+
+    function startRepeating() {
+      if(!supportsVibration()) return;
+      const pattern = parsePattern(patternInput.value);
+      // vibrate() returns true/false but may not indicate repeating support, so use setInterval.
+      // calculate pattern total length to schedule repeats
+      const total = pattern.reduce((a,b)=>a+b,0) || 200;
+      // Immediately vibrate once, then repeat on interval
+      navigator.vibrate(pattern);
+      repeatingInterval = setInterval(()=> navigator.vibrate(pattern), total);
+    }
+
+    function stopRepeating() {
+      if(repeatingInterval){
+        clearInterval(repeatingInterval);
+        repeatingInterval = null;
+      }
+      if(supportsVibration()) navigator.vibrate(0); // stop
+    }
+
+    function updateUI(){
+      supportEl.textContent = supportsVibration() ? 'Yes' : 'No';
+      powerBtn.textContent = isOn ? 'Turn OFF' : 'Turn ON';
+      powerBtn.setAttribute('aria-pressed', String(isOn));
+      onoffEl.textContent = isOn ? 'ON' : 'OFF';
+    }
+
+    powerBtn.addEventListener('click', ()=>{
+      if(!supportsVibration()){
+        alert('Vibration API not supported in this browser. Try on a mobile device (e.g. Android Chrome).');
+        return;
+      }
+      isOn = !isOn;
+      if(isOn){
+        if(continuousCheckbox.checked) startRepeating();
+        else vibrateOnce();
+      } else {
+        stopRepeating();
+      }
+      updateUI();
+    });
+
+    testBtn.addEventListener('click', ()=>{
+      if(!supportsVibration()) return alert('Vibration not supported here.');
+      vibrateOnce();
+    });
+
+    stopBtn.addEventListener('click', ()=>{
+      isOn = false;
+      stopRepeating();
+      updateUI();
+    });
+
+    // Stop vibration when the page is hidden (good UX / battery friendly)
+    document.addEventListener('visibilitychange', ()=>{
+      if(document.hidden){
+        isOn = false;
+        stopRepeating();
+        updateUI();
+      }
+    });
+
+    // initialize
+    updateUI();
+
+    // Helpful keyboard shortcut: press 'v' to toggle
+    document.addEventListener('keydown', (e)=>{
+      if(e.key.toLowerCase() === 'v') powerBtn.click();
+    });
+
+  </script>
+</body>
+</html>
